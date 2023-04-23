@@ -11,14 +11,16 @@
 
 #define JPG_QUALITY 100
 
-Image::Image(const char* image_path, ImageFormat output_format) : m_image_data(NULL), m_output_format(output_format) {
+Image::Image(const char* image_path, ImageFormat output_format)
+ : m_image_data(NULL), m_output_format(output_format) {
     if (!Read(image_path, 0)) {
         std::cerr << "ERR: image load unsuccessful" << std::endl;
         exit(1);
     }
 }
 
-Image::Image(const char* image_path, ImageFormat output_format, int colour_channels) : m_image_data(NULL), m_output_format(output_format) {
+Image::Image(const char* image_path, int colour_channels, ImageFormat output_format)
+ : m_image_data(NULL), m_output_format(output_format) {
     if (!Read(image_path, colour_channels)) {
         std::cerr << "ERR: image load unsuccessful" << std::endl;
         exit(1);
@@ -40,9 +42,12 @@ bool Image::Read(const char* image_path, int colour_channels) {
 }
 
 bool Image::Resize(int req_width, int req_height) {
-    int success;
     std::cout << "resizing image" << std::endl;
-    unsigned char* resized_image_data = (unsigned char*)malloc(req_width * req_height * m_colour_channels);
+
+    int success;
+    int new_size = req_width * req_height * m_colour_channels;
+
+    unsigned char* resized_image_data = (unsigned char*)malloc(new_size);
     success = stbir_resize_uint8(m_image_data, 
                                 m_width, m_height,
                                 0,                       //input stride
@@ -50,10 +55,14 @@ bool Image::Resize(int req_width, int req_height) {
                                 req_width, req_height, 
                                 0,                       //output stride
                                 m_colour_channels);
+
     stbi_image_free(m_image_data);
     m_image_data = resized_image_data;
+    resized_image_data = nullptr;
+
     m_width = req_width;
     m_height = req_height;
+
     return success;
 }
 

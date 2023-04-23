@@ -1,3 +1,4 @@
+#pragma once
 enum ImageFormat {
     PNG, JPG, BMP
 };
@@ -13,7 +14,7 @@ class Image {
         bool Resize(int req_width, int req_height);
         virtual bool Write(const char* output_filename);
 
-        Image(const char* image_path, ImageFormat output_format);
-        Image(const char* image_path, ImageFormat output_format, int colour_channels);
+        explicit Image(const char* image_path, ImageFormat output_format = ImageFormat::PNG);
+        explicit Image(const char* image_path, int colour_channels, ImageFormat output_format = ImageFormat::PNG);
         virtual ~Image();
 };

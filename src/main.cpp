@@ -1,4 +1,5 @@
 #include <iostream>
+#include <memory>
 #include "C2PImage.hpp"
 
 int main() {
@@ -8,9 +9,9 @@ int main() {
     std::cout << "Input image path: " << std::endl;
     std::getline(std::cin, filename);
 
-    C2PImage image(filename.c_str(), ImageFormat::PNG, 3);
-    if(image.ConvertToC2P()) { //if conversion doesn't fail write
-        if (!image.Write("outputimg")) //if write does fail err
+    std::unique_ptr<C2PImage> image = std::make_unique<C2PImage>(filename.c_str(), ImageFormat::PNG);
+    if(image->ConvertToC2P()) { //if conversion doesn't fail write
+        if (!image->Write("outputimg")) //if write does fail err
             std::cerr << "ERR: image write failed" << std::endl;
     }
     return 0;
