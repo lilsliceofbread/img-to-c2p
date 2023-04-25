@@ -4,16 +4,18 @@
 class C2PImage : public Image {
     public:
         bool ConvertToC2P();
-        bool Write(const char* output_filename) override; //return true if success
+        bool Write(const char* output_filename) override;
 
         C2PImage(const char* image_path, ImageFormat output_format);
         ~C2PImage() override;
     private:
         bool ConvertRGB565();
-        bool CreateHeader();
-        bool CreateFooter();
+        bool CreateHeader(unsigned char* image_data);
+        bool CreateFooter(unsigned char* image_data);
         bool CompressData();
 
-        unsigned char* m_converted_image_data;
-        unsigned char* m_formatted_image_data;
+        unsigned char* m_converted_image_data; /*image data after rgb565 and zlib compression
+                                                 didn't want to use m_image_data because can't include stb in this file
+                                                 to free temp data*/
+        unsigned char* m_formatted_data; //final image
 };
