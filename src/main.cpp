@@ -2,6 +2,8 @@
 #include <memory>
 #include "C2PImage.hpp"
 
+//SURVEY FOR MEMORY LEAKS -> USING =nullptr INSTEAD OF free()
+
 int main() {
     std::string filename; //no setting of max size causes segfaults
     std::cout << "Img to C2P program" << std::endl;

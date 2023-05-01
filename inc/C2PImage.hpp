@@ -15,7 +15,8 @@ class C2PImage : public Image {
         bool CompressData();
 
         unsigned char* m_converted_image_data; /*image data after rgb565 and zlib compression
-                                                 didn't want to use m_image_data because can't include stb in this file
-                                                 to free temp data*/
+                                                 couldn't use m_image_data because can't include stb_image twice in this file
+                                                 to free temp data, hopefully there is better solution*/
         unsigned char* m_formatted_data; //final image
+        int m_compressed_data_size;
 };

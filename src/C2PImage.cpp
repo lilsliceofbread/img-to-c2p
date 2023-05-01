@@ -2,6 +2,7 @@
 #include <iostream>
 #include <fstream>
 #include <algorithm>
+#include "zlib/zlib.h"
 
 #define MAX_WIDTH 0x136
 #define MAX_HEIGHT 0x191
@@ -11,14 +12,15 @@
 #define FOOTER_LENGTH 0x17C
 #define IMAGE_STARTOFFSET 0xDC
 
-uint8_t ConvertBitRange(uint8_t num,uint8_t original_bit_max, uint8_t new_bit_max) {
+//putting this function here is a bit cringe but don't know where else
+inline uint8_t ConvertBitRange(uint8_t num,uint8_t original_bit_max, uint8_t new_bit_max) {
     float scale_factor = static_cast<float>(original_bit_max / new_bit_max);
     uint8_t converted_num = static_cast<int>(num / scale_factor);
     return converted_num;
 }
 
 C2PImage::C2PImage(const char* image_path, ImageFormat output_format) 
-: Image(image_path, COLOUR_CHANNELS, output_format) {
+: Image(image_path, COLOUR_CHANNELS, output_format), m_compressed_data_size(0) {
     std::cout << "c2pimage class constructed" << std::endl;
 
 }
@@ -35,15 +37,15 @@ bool C2PImage::ConvertToC2P() {
         std::cerr << "ERR: image RGB565 conversion failed" << "\n";
         return false;
     }
-    if(!CompressData()) {
-        std::cerr << "ERR: c2pimage compression failed" << "\n";
-        return false;
-    }
     if(!CreateHeader(m_formatted_data)) {
         std::cerr << "ERR: c2pimage header creation failed" << "\n";
         return false;
     }   
-    
+    //appends converted image data to formatted image data as well
+    if(!CompressData()) {
+        std::cerr << "ERR: c2pimage compression failed" << "\n";
+        return false;
+    }
     if(!CreateFooter(m_formatted_data)) {
         std::cerr << "ERR: c2pimage footer creation failed" << std::endl;
         return false;
@@ -114,7 +116,28 @@ bool C2PImage::ConvertRGB565() {
 }
 
 bool C2PImage::CompressData() {
-    //zlib
+    int success;
+    int data_size = m_width * m_height * 2;
+    int alloc_size = (data_size * 1.1) + 12;/*amount we will allocate for compression
+                                            110% for nice safety and 12 bytes padding*/
+    unsigned char* compressed_image_data = (unsigned char*)malloc(alloc_size);
+
+    success = compress(compressed_image_data, (uLongf*)&alloc_size, m_converted_image_data, data_size);
+    switch(success) {
+        case Z_OK:
+            std::cout << "compression success\n";
+            break;
+        case Z_MEM_ERROR:
+            std::cerr << "ERR: ZLib ran out of memory\n";
+            return false;
+            break;
+        case Z_BUF_ERROR:
+            std::cerr << "ERR: ZLib output buffer too small\n";
+            return false;
+            break;
+    }
+    //append compressed_image_data to 
+    m_compressed_data_size = alloc_size;
     return true;
 }
 
@@ -145,7 +168,8 @@ bool C2PImage::CreateHeader(unsigned char* image_data) {
 
 bool C2PImage::CreateFooter(unsigned char* image_data) {
     //assert correct length
-    int converted_size = m_width * m_height * 2;
+    if(m_compressed_data_size == 0)
+        return false;
 
     unsigned char footer[] = {
         0x30, 0x31, 0x30, 0x30, 0x00, 0x00, 0x00, 0x8C, 0x07, 0x70, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -174,11 +198,12 @@ bool C2PImage::CreateFooter(unsigned char* image_data) {
 		0x00, 0x00, 0x10, 0x00, 0x01, 0x01, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
     };
 
+    //can remove after first use
     if(!sizeof(footer) == FOOTER_LENGTH)
         return false;
 
     //if doesn't work check these values
-    std::copy(footer, footer+FOOTER_LENGTH, image_data+HEADER_LENGTH+converted_size-1);
+    std::copy(footer, footer+FOOTER_LENGTH, image_data+HEADER_LENGTH+m_compressed_data_size-1);
     return true;
 }
 
