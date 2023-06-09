@@ -1,8 +1,9 @@
-#include "C2PImage.hpp"
+#include "zlib/zlib.h"
+
 #include <iostream>
 #include <fstream>
 #include <algorithm>
-#include "zlib/zlib.h"
+#include "C2PImage.hpp"
 
 #define MAX_WIDTH 0x136
 #define MAX_HEIGHT 0x191
@@ -19,10 +20,9 @@ inline uint8_t ConvertBitRange(uint8_t num,uint8_t original_bit_max, uint8_t new
     return converted_num;
 }
 
-C2PImage::C2PImage(const char* image_path, ImageFormat output_format) 
-: Image(image_path, COLOUR_CHANNELS, output_format), m_compressed_data_size(0) {
+C2PImage::C2PImage(std::string image_path) 
+: Image(image_path, COLOUR_CHANNELS, ImageFormat::PNG), m_compressed_data_size(0) { // format doesn't matter
     std::cout << "c2pimage class constructed" << std::endl;
-
 }
 
 bool C2PImage::ConvertToC2P() {
@@ -37,15 +37,15 @@ bool C2PImage::ConvertToC2P() {
         std::cerr << "ERR: image RGB565 conversion failed" << "\n";
         return false;
     }
-    if(!CreateHeader(m_formatted_data)) {
-        std::cerr << "ERR: c2pimage header creation failed" << "\n";
-        return false;
-    }   
-    //appends converted image data to formatted image data as well
     if(!CompressData()) {
         std::cerr << "ERR: c2pimage compression failed" << "\n";
         return false;
     }
+    if(!CreateHeader(m_formatted_data)) {
+        std::cerr << "ERR: c2pimage header creation failed" << "\n";
+        return false;
+    } 
+    std::copy(m_converted_image_data, m_converted_image_data+m_compressed_data_size, m_formatted_data+HEADER_LENGTH); 
     if(!CreateFooter(m_formatted_data)) {
         std::cerr << "ERR: c2pimage footer creation failed" << std::endl;
         return false;
@@ -53,31 +53,37 @@ bool C2PImage::ConvertToC2P() {
     return true;
 }
 
-bool C2PImage::Write(const char* output_filename) {
-    std::ofstream output_stream;
-    return true;
+bool C2PImage::Write(std::string f) {
+    std::fstream output_file;
+    std::string filename = f + ".c2p";
 
+    output_file.open(filename, std::ios::out | std::ios::binary);
+    output_file.write(reinterpret_cast<char*>(m_formatted_data), HEADER_LENGTH + m_compressed_data_size + FOOTER_LENGTH);
+
+    output_file.close();
+    std::cout << "wrote c2p file" << std::endl;
+    return true;
 }
 
 bool C2PImage::ConvertRGB565() {
-    //unsafe af function, might be able to use shared_ptr
+    //unsafe af function
     int size = m_width * m_height * m_colour_channels;
-    m_converted_image_data = (unsigned char*)malloc(size);
+    m_converted_image_data = (unsigned char*)malloc(sizeof(char) * m_width * m_height * 2);
     uint8_t red, green, blue;
     uint16_t final_byte;
-    unsigned char final_byte_1, final_byte_2;
+    uint8_t final_byte_1, final_byte_2;
 
+    int current_index, current_converted_index;
     for(int i = 0; i < m_height; i++) {
         for(int j = 0; j < m_width; j++) {
             //i moves you down the rows, j moves you across the columns
-            int current_index = i * m_width * m_colour_channels + j * m_colour_channels;
+            current_index = i * m_width * m_colour_channels + j * m_colour_channels;
 
             //converted image data has 2 bytes for colour channels 
-            int current_converted_index = i * m_width * 2 + j * 2;
+            current_converted_index = i * m_width * 2 + j * 2;
 
             //check if index goes outside pointer
             if(current_index + 2 > size) {
-                free(m_converted_image_data);
                 return false;
             }
 
@@ -97,21 +103,21 @@ bool C2PImage::ConvertRGB565() {
             final_byte += blue;
 
             //converting to unsigned char for array
-            final_byte_1 = static_cast<unsigned char>((final_byte >> 8) & 0xFF); //bitshift right by 1 byte
             final_byte_2 = static_cast<unsigned char>(final_byte & 0xFF); //0xFF ensures no numbers on leftmost byte (overflowing bytes?)
+            final_byte_1 = static_cast<unsigned char>((final_byte >> 8) & 0xFF); //bitshift right by 1 byte
 
             //new colour channel bytes is 2
             m_converted_image_data[current_converted_index] = final_byte_1;
             m_converted_image_data[current_converted_index + 1] = final_byte_2;
 
-            std::cout << m_converted_image_data[current_converted_index] << " "; //only shows half the bytes
             final_byte = 0;
-            final_byte_1, final_byte_2 = 0;
-            red, green, blue = 0;
+            final_byte_1 = 0; 
+            final_byte_2 = 0;
+            red = 0;
+            green = 0;
+            blue = 0;
         }
-        std::cout << std::endl;
     }
-
     return true;
 }
 
@@ -136,33 +142,76 @@ bool C2PImage::CompressData() {
             return false;
             break;
     }
-    //append compressed_image_data to 
+    free(m_converted_image_data);
     m_compressed_data_size = alloc_size;
+    m_converted_image_data = compressed_image_data;
     return true;
 }
 
 bool C2PImage::CreateHeader(unsigned char* image_data) {   
-    /*values from file format docs
-      needs size of compressed data + header and footer length*/
-    int _a;
-    int _b;
-    int _c;
-    int _d;
-    int _e;
+    uint32_t file_size = HEADER_LENGTH + m_compressed_data_size + FOOTER_LENGTH;
+    if(file_size > 0xFFFFFF) 
+        std::cout << "WARNING: file_size > 0xFFFFFF for some reason" << std::endl;
+    uint32_t _a = ~(file_size & 0xFFFFFF) & 0xFFFFFF; //&ing prevents non-zero values in top byte
+    uint8_t _a1 = (uint8_t)(_a & 0xFF);
+    uint8_t _a2 = (uint8_t)((_a >> 8) & 0xFF);
+    uint8_t _a3 = (uint8_t)((_a >> 16) & 0xFF);
 
-    int _w = m_width;
-    int _h = m_height;
-    int _f;
+    uint8_t _b = (0x1D1 - (file_size & 0xFF)) & 0xFF;
+
+    uint32_t _c = file_size - 0x20;
+    uint8_t _c1 = (uint8_t)(_c & 0xFF);
+    uint8_t _c2 = (uint8_t)((_c >> 8) & 0xFF);
+    uint8_t _c3 = (uint8_t)((_c >> 16) & 0xFF);
+    uint8_t _c4 = (uint8_t)((_c >> 24) & 0xFF);
+
+    uint32_t _d = file_size - 0x234;
+    uint8_t _d1 = (uint8_t)(_d & 0xFF);
+    uint8_t _d2 = (uint8_t)((_d >> 8) & 0xFF);
+    uint8_t _d3 = (uint8_t)((_d >> 16) & 0xFF);
+    uint8_t _d4 = (uint8_t)((_d >> 24) & 0xFF);
+
+    uint32_t _e = file_size - 0x254;
+    uint8_t _e1 = (uint8_t)(_e & 0xFF);
+    uint8_t _e2 = (uint8_t)((_e >> 8) & 0xFF);
+    uint8_t _e3 = (uint8_t)((_e >> 16) & 0xFF);
+    uint8_t _e4 = (uint8_t)((_e >> 24) & 0xFF);
+
+    uint16_t _w = m_width & 0xFFFF;
+    uint8_t _w1 = (uint8_t)(_w & 0xFF);
+    uint8_t _w2 = (uint8_t)((_w >> 8) & 0xFF);
+    uint16_t _h = m_height & 0xFFFF;
+    uint8_t _h1 = (uint8_t)(_h & 0xFF);
+    uint8_t _h2 = (uint8_t)((_h >> 8) & 0xFF);
+
+    uint32_t _f = file_size - 0x258;
+    uint8_t _f1 = (uint8_t)(_f & 0xFF);
+    uint8_t _f2 = (uint8_t)((_f >> 8) & 0xFF);
+    uint8_t _f3 = (uint8_t)((_f >> 16) & 0xFF);
+    uint8_t _f4 = (uint8_t)((_f >> 24) & 0xFF);
 
     unsigned char header[] = {
-        
+        0xBC, 0xBE, 0xAC, 0xB6, 0xB0, 0xFF, 0xFF, 0xFF, 0x9C, 0xCD, 0x8F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+		0xFF, 0xFE, 0xFF, 0xEF, 0xFF, 0xFE, 0xFF,  _a3, _a2,  _a1,  _b,   0x00, 0x00, 0x00, 0x00, 0x00,
+		0x43, 0x43, 0x30, 0x31, 0x30, 0x30, 0x43, 0x6F, 0x6C, 0x6F, 0x72, 0x43, 0x50, 0x00, 0x00, 0x00,
+		_c4,  _c3,  _c2,  _c1,  0x00, 0x00, 0x00, 0x09, _d4,  _d3,  _d2,  _d1,  0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x7C, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x30, 0x31, 0x30, 0x30, _e4,  _e3,  _e2,  _e1,
+		0x00, 0x00, _w2,  _w1,  _h2,  _h1,  0x00, 0x10, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF,
+		0x00, 0x01, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, _f4,  _f3,  _f2,  _f1
     };
 
-    if(!sizeof(header) == HEADER_LENGTH)
-        return false;
+    //if(!(sizeof(header) == HEADER_LENGTH))
+    //    return false;
 
-    //if doesn't work check these values
     std::copy(header, header+HEADER_LENGTH, image_data);
+    std::cout << "did header" << std::endl;
     return true;
 }
 
@@ -199,17 +248,18 @@ bool C2PImage::CreateFooter(unsigned char* image_data) {
     };
 
     //can remove after first use
-    if(!sizeof(footer) == FOOTER_LENGTH)
-        return false;
+    //if(!(sizeof(footer) == FOOTER_LENGTH))
+    //    return false;
 
-    //if doesn't work check these values
-    std::copy(footer, footer+FOOTER_LENGTH, image_data+HEADER_LENGTH+m_compressed_data_size-1);
+    std::copy(footer, footer+FOOTER_LENGTH, image_data+HEADER_LENGTH+m_compressed_data_size);
+    std::cout << "created footer" << std::endl;
     return true;
 }
 
 C2PImage::~C2PImage() {
     /*no idea if i should use free or delete[] here
       since i used malloc thought i would use c-style free*/
+    std::cout << "deleted c2pimage instance" << std::endl;
     free(m_converted_image_data);
     free(m_formatted_data);
 }

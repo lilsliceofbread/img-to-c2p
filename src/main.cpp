@@ -2,19 +2,21 @@
 #include <memory>
 #include "C2PImage.hpp"
 
-//SURVEY FOR MEMORY LEAKS -> USING =nullptr INSTEAD OF free()
-
 int main() {
-    std::string filename; //no setting of max size causes segfaults
-    std::cout << "Img to C2P program" << std::endl;
+    std::string infile, outfile;
+    std::cout << "<<<Img to C2P program>>>" << std::endl;
 
     std::cout << "Input image path: " << std::endl;
-    std::getline(std::cin, filename);
+    std::getline(std::cin, infile);
 
-    std::unique_ptr<C2PImage> image = std::make_unique<C2PImage>(filename.c_str(), ImageFormat::PNG);
-    if(image->ConvertToC2P()) { //if conversion doesn't fail write
-        if (!image->Write("outputimg")) //if write does fail err
-            std::cerr << "ERR: image write failed" << std::endl;
-    }
+    C2PImage* image = new C2PImage(infile);
+    image->ConvertToC2P(); 
+
+    std::cout << "Output filename: " << std::endl;
+    std::getline(std::cin, outfile);
+    if (!image->Write(outfile)) //if write does fail err
+        std::cerr << "ERR: image write failed" << std::endl;
+
+    delete image;
     return 0;
 }

@@ -4,9 +4,9 @@
 class C2PImage : public Image {
     public:
         bool ConvertToC2P();
-        bool Write(const char* output_filename) override;
+        bool Write(std::string f) override;
 
-        C2PImage(const char* image_path, ImageFormat output_format);
+        C2PImage(std::string image_path);
         ~C2PImage() override;
     private:
         bool ConvertRGB565();

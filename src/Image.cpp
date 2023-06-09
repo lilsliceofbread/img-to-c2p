@@ -5,13 +5,13 @@
 #define STB_IMAGE_RESIZE_IMPLEMENTATION
 #include "stb/stb_image_resize.h"
 
-#include "Image.hpp"
-#include <iostream>
 #include <string>
+#include <iostream>
+#include "Image.hpp"
 
 #define JPG_QUALITY 100
 
-Image::Image(const char* image_path, ImageFormat output_format)
+Image::Image(std::string image_path, ImageFormat output_format)
  : m_image_data(NULL), m_output_format(output_format) {
     if (!Read(image_path, 0)) {
         std::cerr << "ERR: image load unsuccessful" << std::endl;
@@ -19,7 +19,7 @@ Image::Image(const char* image_path, ImageFormat output_format)
     }
 }
 
-Image::Image(const char* image_path, int colour_channels, ImageFormat output_format)
+Image::Image(std::string image_path, int colour_channels, ImageFormat output_format)
  : m_image_data(NULL), m_output_format(output_format) {
     if (!Read(image_path, colour_channels)) {
         std::cerr << "ERR: image load unsuccessful" << std::endl;
@@ -29,15 +29,14 @@ Image::Image(const char* image_path, int colour_channels, ImageFormat output_for
 }
 
 
-bool Image::Read(const char* image_path, int colour_channels) {
+bool Image::Read(std::string image_path, int colour_channels) {
     std::cout << "loading image" << std::endl;
     //                                                        channels output     forced amt of channels
-    m_image_data = stbi_load(image_path, &m_width, &m_height, &m_colour_channels, colour_channels);
+    m_image_data = stbi_load(image_path.c_str(), &m_width, &m_height, &m_colour_channels, colour_channels);
     //if image not loaded return false
     if(m_image_data == NULL) {
         return false;
     }
-    std::cout << m_colour_channels << std::endl;
     return true;
 }
 
@@ -66,11 +65,11 @@ bool Image::Resize(int req_width, int req_height) {
     return success;
 }
 
-bool Image::Write(const char* output_filename) {
+bool Image::Write(std::string f) {
     int success;
     std::cout << "exporting image" << std::endl;
     //do this because c strings are annoying
-    std::string filename = output_filename; 
+    std::string filename = f; 
 
     switch(m_output_format) {
         case ImageFormat::PNG:

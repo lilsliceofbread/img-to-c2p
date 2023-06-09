@@ -22,5 +22,6 @@ clean:
 	rm -rf $(OBJ_DIR)
 	rm -rf $(BIN_DIR)
 
-simple: # just makes exe file in build/ with no fancy .o files
-	g++ -g ../src/*.cpp -I../inc -L../lib -lz -o imgtoc2p
+simple:
+    # just makes exe file in build/ with no fancy .o files
+	g++ -g -Wall ../src/*.cpp -I../inc -L../lib -lz -o imgtoc2p
