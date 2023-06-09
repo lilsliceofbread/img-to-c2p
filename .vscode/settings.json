@@ -60,7 +60,8 @@
         "stop_token": "cpp",
         "thread": "cpp",
         "semaphore": "cpp",
-        "__nullptr": "cpp"
+        "__nullptr": "cpp",
+        "old stuff": "cpp"
     },
     "C_Cpp.default.compilerPath": "/usr/bin/g++"
 }

@@ -25,23 +25,22 @@ Image::Image(std::string image_path, int colour_channels, ImageFormat output_for
         std::cerr << "ERR: image load unsuccessful" << std::endl;
         exit(1);
     }
-    m_colour_channels = colour_channels; //since it was set manually
+    m_colour_channels = colour_channels; // since it was set manually
 }
 
 
 bool Image::Read(std::string image_path, int colour_channels) {
-    std::cout << "loading image" << std::endl;
     //                                                        channels output     forced amt of channels
     m_image_data = stbi_load(image_path.c_str(), &m_width, &m_height, &m_colour_channels, colour_channels);
-    //if image not loaded return false
+    // if image not loaded return false
     if(m_image_data == NULL) {
         return false;
     }
+    std::cout << "IMG: loaded image" << std::endl;
     return true;
 }
 
 bool Image::Resize(int req_width, int req_height) {
-    std::cout << "resizing image" << std::endl;
 
     int success;
     int new_size = req_width * req_height * m_colour_channels;
@@ -49,10 +48,10 @@ bool Image::Resize(int req_width, int req_height) {
     unsigned char* resized_image_data = (unsigned char*)malloc(new_size);
     success = stbir_resize_uint8(m_image_data, 
                                 m_width, m_height,
-                                0,                       //input stride
+                                0,                       // input stride
                                 resized_image_data, 
                                 req_width, req_height, 
-                                0,                       //output stride
+                                0,                       // output stride
                                 m_colour_channels);
 
     stbi_image_free(m_image_data);
@@ -62,13 +61,14 @@ bool Image::Resize(int req_width, int req_height) {
     m_width = req_width;
     m_height = req_height;
 
+    std::cout << "IMG: resized image" << std::endl;
     return success;
 }
 
 bool Image::Write(std::string f) {
     int success;
-    std::cout << "exporting image" << std::endl;
-    //do this because c strings are annoying
+    std::cout << "IMG: exporting image" << std::endl;
+    // do this because c strings are annoying
     std::string filename = f; 
 
     switch(m_output_format) {

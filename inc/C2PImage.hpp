@@ -3,20 +3,17 @@
 
 class C2PImage : public Image {
     public:
-        bool ConvertToC2P();
-        bool Write(std::string f) override;
+        bool ConvertToC2P(bool keep_aspect_ratio);
+        bool Write(std::string f);
 
         C2PImage(std::string image_path);
         ~C2PImage() override;
     private:
         bool ConvertRGB565();
-        bool CreateHeader(unsigned char* image_data);
-        bool CreateFooter(unsigned char* image_data);
         bool CompressData();
+        bool CreateHeader(uint8_t* image_data);
+        bool CreateFooter(uint8_t* image_data);
 
-        unsigned char* m_converted_image_data; /*image data after rgb565 and zlib compression
-                                                 couldn't use m_image_data because can't include stb_image twice in this file
-                                                 to free temp data, hopefully there is better solution*/
-        unsigned char* m_formatted_data; //final image
+        uint8_t* m_formatted_data; // final image
         int m_compressed_data_size;
 };

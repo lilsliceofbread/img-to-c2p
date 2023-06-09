@@ -1,11 +1,10 @@
-# idk how to do good makefiles lol
 EXE_FILE := imgtoc2p
 CXX := g++
 
 OBJ_DIR := ./obj
 BIN_DIR := ./bin
 
-COMP_FLAGS := -g -I../inc -c # -c ensures compile to .o files (CHANGE -g TO -O2 WHEN PROJ DONE)
+COMP_FLAGS := -02 -I../inc -c # -c ensures compile to .o files 
 LINK_FLAGS := -L../lib -lz # if this doesn't work try moving -L to COMP_FLAGS
 SOURCES := ../src/$(wildcard *.cpp)
 
@@ -15,7 +14,7 @@ default: obj_compile
 
 obj_compile: 
 	mkdir ./obj
-	$(CXX) $(SOURCES) $(COMP_FLAGS)
+	$(CXX) $(SOURCES) $(COMP_FLAGS) -o 
 	mv *.o ./obj
 
 clean:

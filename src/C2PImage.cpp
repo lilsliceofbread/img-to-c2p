@@ -13,25 +13,27 @@
 #define FOOTER_LENGTH 0x17C
 #define IMAGE_STARTOFFSET 0xDC
 
-//putting this function here is a bit cringe but don't know where else
-inline uint8_t ConvertBitRange(uint8_t num,uint8_t original_bit_max, uint8_t new_bit_max) {
-    float scale_factor = static_cast<float>(original_bit_max / new_bit_max);
-    uint8_t converted_num = static_cast<int>(num / scale_factor);
-    return converted_num;
-}
-
 C2PImage::C2PImage(std::string image_path) 
 : Image(image_path, COLOUR_CHANNELS, ImageFormat::PNG), m_compressed_data_size(0) { // format doesn't matter
-    std::cout << "c2pimage class constructed" << std::endl;
+    std::cout << "C2P: c2pimage class constructed" << std::endl;
 }
 
-bool C2PImage::ConvertToC2P() {
-    if(!Resize(MAX_WIDTH, MAX_HEIGHT)) {
+bool C2PImage::ConvertToC2P(bool keep_aspect_ratio) {
+    int resize_width = MAX_WIDTH;    
+    int resize_height = MAX_HEIGHT;
+    if(keep_aspect_ratio) {
+        float aspect_ratio = (float)m_width / (float)m_height;
+        if(aspect_ratio <= 0) aspect_ratio = 1; // fix a potential divide by zero
+
+        resize_height = (int)((float)MAX_WIDTH / aspect_ratio);
+    }
+
+    if(!Resize(resize_width, resize_height)) {
         std::cerr << "ERR: image resize failed" << "\n";
         return false;
     }
 
-    m_formatted_data = (unsigned char*)malloc(HEADER_LENGTH + (m_width * m_height * 2) + FOOTER_LENGTH);
+    m_formatted_data = (uint8_t*)malloc(HEADER_LENGTH + (m_width * m_height * 2) + FOOTER_LENGTH);
 
     if(!ConvertRGB565()) {
         std::cerr << "ERR: image RGB565 conversion failed" << "\n";
@@ -45,7 +47,15 @@ bool C2PImage::ConvertToC2P() {
         std::cerr << "ERR: c2pimage header creation failed" << "\n";
         return false;
     } 
-    std::copy(m_converted_image_data, m_converted_image_data+m_compressed_data_size, m_formatted_data+HEADER_LENGTH); 
+
+    //copy image data into final image
+    std::copy(m_image_data, m_image_data+m_compressed_data_size, HEADER_LENGTH+m_formatted_data); 
+
+    // no longer need this since am not double freeing
+    // gets freed by Image base destructor
+    //m_image_data = nullptr; pretty sure this leaked ~0.5GB of memory
+    
+
     if(!CreateFooter(m_formatted_data)) {
         std::cerr << "ERR: c2pimage footer creation failed" << std::endl;
         return false;
@@ -61,14 +71,15 @@ bool C2PImage::Write(std::string f) {
     output_file.write(reinterpret_cast<char*>(m_formatted_data), HEADER_LENGTH + m_compressed_data_size + FOOTER_LENGTH);
 
     output_file.close();
-    std::cout << "wrote c2p file" << std::endl;
+    std::cout << "C2P: wrote c2p file" << std::endl;
     return true;
 }
 
 bool C2PImage::ConvertRGB565() {
     //unsafe af function
     int size = m_width * m_height * m_colour_channels;
-    m_converted_image_data = (unsigned char*)malloc(sizeof(char) * m_width * m_height * 2);
+    uint8_t* converted_image_data = (uint8_t*)malloc(sizeof(char) * m_width * m_height * 2);
+
     uint8_t red, green, blue;
     uint16_t final_byte;
     uint8_t final_byte_1, final_byte_2;
@@ -91,24 +102,17 @@ bool C2PImage::ConvertRGB565() {
             green = m_image_data[current_index+1];
             blue = m_image_data[current_index+2];
             
-            red = ConvertBitRange(red, 0xFF, 0x1F); //Between 0 and 31
-            green = ConvertBitRange(green, 0xFF, 0x3F); //Between 0 and 63
-            blue = ConvertBitRange(blue, 0xFF, 0x1F); //Between 0 and 31
+            final_byte = ((red & 0b11111000) << 8)      // keep red top 5 bits and bitshift to leftmost
+                        +((green & 0b11111100) << 3)    // green
+                        +((blue & 0b11111000) >> 3);    //
 
-            //bitshifting colour values into 2 bytes
-            final_byte += red;
-            final_byte <<= 11;
-            final_byte += green;
-            final_byte <<= 5;
-            final_byte += blue;
+            // converting to uint8_t for array
+            final_byte_1 = (uint8_t)(final_byte & 0xFF);        // 0xFF ensures no numbers on leftmost byte 
+            final_byte_2 = (uint8_t)((final_byte >> 8) & 0xFF); // bitshift right by 1 byte
 
-            //converting to unsigned char for array
-            final_byte_2 = static_cast<unsigned char>(final_byte & 0xFF); //0xFF ensures no numbers on leftmost byte (overflowing bytes?)
-            final_byte_1 = static_cast<unsigned char>((final_byte >> 8) & 0xFF); //bitshift right by 1 byte
-
-            //new colour channel bytes is 2
-            m_converted_image_data[current_converted_index] = final_byte_1;
-            m_converted_image_data[current_converted_index + 1] = final_byte_2;
+            // new colour channel bytes is 2
+            converted_image_data[current_converted_index] = final_byte_2;     // topmost byte
+            converted_image_data[current_converted_index + 1] = final_byte_1; // bottom byte
 
             final_byte = 0;
             final_byte_1 = 0; 
@@ -118,20 +122,24 @@ bool C2PImage::ConvertRGB565() {
             blue = 0;
         }
     }
+    free(m_image_data); // free old image data
+    m_image_data = converted_image_data;
+    converted_image_data = nullptr;
+
+    std::cout << "C2P: converted to RGB565" << std::endl;
     return true;
 }
 
 bool C2PImage::CompressData() {
     int success;
     int data_size = m_width * m_height * 2;
-    int alloc_size = (data_size * 1.1) + 12;/*amount we will allocate for compression
-                                            110% for nice safety and 12 bytes padding*/
-    unsigned char* compressed_image_data = (unsigned char*)malloc(alloc_size);
+    int alloc_size = (data_size * 1.1) + 12;/* amount we will allocate for compression
+                                            110% for nice safety and 12 bytes padding */
+    uint8_t* compressed_image_data = (uint8_t*)malloc(alloc_size);
 
-    success = compress(compressed_image_data, (uLongf*)&alloc_size, m_converted_image_data, data_size);
+    success = compress(compressed_image_data, (uLongf*)&alloc_size, m_image_data, data_size);
     switch(success) {
         case Z_OK:
-            std::cout << "compression success\n";
             break;
         case Z_MEM_ERROR:
             std::cerr << "ERR: ZLib ran out of memory\n";
@@ -142,20 +150,23 @@ bool C2PImage::CompressData() {
             return false;
             break;
     }
-    free(m_converted_image_data);
+
     m_compressed_data_size = alloc_size;
-    m_converted_image_data = compressed_image_data;
+    free(m_image_data); // free old data
+    m_image_data = compressed_image_data;
+    compressed_image_data = nullptr;
+
+    std::cout << "C2P: compression successful" << std::endl;
     return true;
 }
 
-bool C2PImage::CreateHeader(unsigned char* image_data) {   
+bool C2PImage::CreateHeader(uint8_t* image_data) {   
     uint32_t file_size = HEADER_LENGTH + m_compressed_data_size + FOOTER_LENGTH;
-    if(file_size > 0xFFFFFF) 
-        std::cout << "WARNING: file_size > 0xFFFFFF for some reason" << std::endl;
-    uint32_t _a = ~(file_size & 0xFFFFFF) & 0xFFFFFF; //&ing prevents non-zero values in top byte
-    uint8_t _a1 = (uint8_t)(_a & 0xFF);
-    uint8_t _a2 = (uint8_t)((_a >> 8) & 0xFF);
-    uint8_t _a3 = (uint8_t)((_a >> 16) & 0xFF);
+
+    uint32_t _a = ~(file_size & 0xFFFFFF) & 0xFFFFFF; // &ing prevents non-zero values in top byte
+    uint8_t _a1 = (uint8_t)(_a & 0xFF);         // separate bytes of value
+    uint8_t _a2 = (uint8_t)((_a >> 8) & 0xFF);  // 1-3 goes from bottom byte
+    uint8_t _a3 = (uint8_t)((_a >> 16) & 0xFF); // to top byte
 
     uint8_t _b = (0x1D1 - (file_size & 0xFF)) & 0xFF;
 
@@ -180,6 +191,7 @@ bool C2PImage::CreateHeader(unsigned char* image_data) {
     uint16_t _w = m_width & 0xFFFF;
     uint8_t _w1 = (uint8_t)(_w & 0xFF);
     uint8_t _w2 = (uint8_t)((_w >> 8) & 0xFF);
+
     uint16_t _h = m_height & 0xFFFF;
     uint8_t _h1 = (uint8_t)(_h & 0xFF);
     uint8_t _h2 = (uint8_t)((_h >> 8) & 0xFF);
@@ -190,7 +202,7 @@ bool C2PImage::CreateHeader(unsigned char* image_data) {
     uint8_t _f3 = (uint8_t)((_f >> 16) & 0xFF);
     uint8_t _f4 = (uint8_t)((_f >> 24) & 0xFF);
 
-    unsigned char header[] = {
+    uint8_t header[] = {
         0xBC, 0xBE, 0xAC, 0xB6, 0xB0, 0xFF, 0xFF, 0xFF, 0x9C, 0xCD, 0x8F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
 		0xFF, 0xFE, 0xFF, 0xEF, 0xFF, 0xFE, 0xFF,  _a3, _a2,  _a1,  _b,   0x00, 0x00, 0x00, 0x00, 0x00,
 		0x43, 0x43, 0x30, 0x31, 0x30, 0x30, 0x43, 0x6F, 0x6C, 0x6F, 0x72, 0x43, 0x50, 0x00, 0x00, 0x00,
@@ -207,20 +219,20 @@ bool C2PImage::CreateHeader(unsigned char* image_data) {
 		0x00, 0x01, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, _f4,  _f3,  _f2,  _f1
     };
 
-    //if(!(sizeof(header) == HEADER_LENGTH))
-    //    return false;
+    if(!(sizeof(header) == HEADER_LENGTH))
+        return false;
 
     std::copy(header, header+HEADER_LENGTH, image_data);
-    std::cout << "did header" << std::endl;
+    std::cout << "C2P: created header" << std::endl;
     return true;
 }
 
-bool C2PImage::CreateFooter(unsigned char* image_data) {
+bool C2PImage::CreateFooter(uint8_t* image_data) {
     //assert correct length
     if(m_compressed_data_size == 0)
         return false;
 
-    unsigned char footer[] = {
+    uint8_t footer[] = {
         0x30, 0x31, 0x30, 0x30, 0x00, 0x00, 0x00, 0x8C, 0x07, 0x70, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 		0x00, 0x00, 0x60, 0x00, 0x07, 0x70, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00,
 		0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x05, 0x00, 0x00, 0x00,
@@ -247,19 +259,18 @@ bool C2PImage::CreateFooter(unsigned char* image_data) {
 		0x00, 0x00, 0x10, 0x00, 0x01, 0x01, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
     };
 
-    //can remove after first use
-    //if(!(sizeof(footer) == FOOTER_LENGTH))
-    //    return false;
+
+    if(!(sizeof(footer) == FOOTER_LENGTH))
+        return false;
 
     std::copy(footer, footer+FOOTER_LENGTH, image_data+HEADER_LENGTH+m_compressed_data_size);
-    std::cout << "created footer" << std::endl;
+    std::cout << "C2P: created footer" << std::endl;
     return true;
 }
 
 C2PImage::~C2PImage() {
     /*no idea if i should use free or delete[] here
       since i used malloc thought i would use c-style free*/
-    std::cout << "deleted c2pimage instance" << std::endl;
-    free(m_converted_image_data);
+    std::cout << "C2P: deleted c2pimage instance" << std::endl;
     free(m_formatted_data);
 }
