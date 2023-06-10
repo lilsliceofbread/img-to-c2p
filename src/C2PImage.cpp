@@ -59,7 +59,7 @@ bool C2PImage::ConvertToC2P(bool keep_aspect_ratio) {
     if(!CreateFooter(m_formatted_data)) {
         std::cerr << "ERR: c2pimage footer creation failed" << std::endl;
         return false;
-    } 
+    }
     return true;
 }
 
@@ -131,13 +131,13 @@ bool C2PImage::ConvertRGB565() {
 }
 
 bool C2PImage::CompressData() {
-    int success;
+    int success = 0;
     int data_size = m_width * m_height * 2;
-    int alloc_size = (data_size * 1.1) + 12;/* amount we will allocate for compression
+    uLongf alloc_size = (data_size * 1.1) + 12;/* amount we will allocate for compression
                                             110% for nice safety and 12 bytes padding */
     uint8_t* compressed_image_data = (uint8_t*)malloc(alloc_size);
 
-    success = compress(compressed_image_data, (uLongf*)&alloc_size, m_image_data, data_size);
+    success = compress(compressed_image_data, /*casting this value to uLongf* caused much pain don't do it again*/&alloc_size, m_image_data, data_size);
     switch(success) {
         case Z_OK:
             break;
@@ -202,7 +202,7 @@ bool C2PImage::CreateHeader(uint8_t* image_data) {
     uint8_t _f3 = (uint8_t)((_f >> 16) & 0xFF);
     uint8_t _f4 = (uint8_t)((_f >> 24) & 0xFF);
 
-    uint8_t header[] = {
+    uint8_t* header = new uint8_t[HEADER_LENGTH]{
         0xBC, 0xBE, 0xAC, 0xB6, 0xB0, 0xFF, 0xFF, 0xFF, 0x9C, 0xCD, 0x8F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
 		0xFF, 0xFE, 0xFF, 0xEF, 0xFF, 0xFE, 0xFF,  _a3, _a2,  _a1,  _b,   0x00, 0x00, 0x00, 0x00, 0x00,
 		0x43, 0x43, 0x30, 0x31, 0x30, 0x30, 0x43, 0x6F, 0x6C, 0x6F, 0x72, 0x43, 0x50, 0x00, 0x00, 0x00,
@@ -219,11 +219,9 @@ bool C2PImage::CreateHeader(uint8_t* image_data) {
 		0x00, 0x01, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, _f4,  _f3,  _f2,  _f1
     };
 
-    if(!(sizeof(header) == HEADER_LENGTH))
-        return false;
-
     std::copy(header, header+HEADER_LENGTH, image_data);
     std::cout << "C2P: created header" << std::endl;
+    delete header;
     return true;
 }
 
@@ -232,7 +230,7 @@ bool C2PImage::CreateFooter(uint8_t* image_data) {
     if(m_compressed_data_size == 0)
         return false;
 
-    uint8_t footer[] = {
+    uint8_t* footer = new uint8_t[FOOTER_LENGTH]{
         0x30, 0x31, 0x30, 0x30, 0x00, 0x00, 0x00, 0x8C, 0x07, 0x70, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 		0x00, 0x00, 0x60, 0x00, 0x07, 0x70, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00,
 		0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x05, 0x00, 0x00, 0x00,
@@ -259,13 +257,10 @@ bool C2PImage::CreateFooter(uint8_t* image_data) {
 		0x00, 0x00, 0x10, 0x00, 0x01, 0x01, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
     };
 
-
-    if(!(sizeof(footer) == FOOTER_LENGTH))
-        return false;
-
     std::copy(footer, footer+FOOTER_LENGTH, image_data+HEADER_LENGTH+m_compressed_data_size);
     std::cout << "C2P: created footer" << std::endl;
     return true;
+    delete footer;
 }
 
 C2PImage::~C2PImage() {

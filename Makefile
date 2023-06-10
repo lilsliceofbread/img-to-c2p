@@ -4,7 +4,7 @@ CXX := g++
 OBJ_DIR := ./build/obj
 BUILD_DIR := ./build
 
-CXX_FLAGS := -I./inc # -O2 causes stack smashing error, might be buffer overflow somewhere
+CXX_FLAGS := -Wall -O2 -I./inc
 LD_FLAGS := -L./lib -lz
 SOURCES := $(wildcard ./src/*.cpp)
 
@@ -24,4 +24,4 @@ clean:
 
 simple:
     # just makes exe file in build/ with no fancy .o files
-	g++ -Wall ./src/*.cpp -I./inc -L./lib -lz -o build/imgtoc2p
+	g++ -Wall -O2 ./src/*.cpp -I./inc -L./lib -lz -o build/imgtoc2p

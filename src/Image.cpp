@@ -34,6 +34,7 @@ bool Image::Read(std::string image_path, int colour_channels) {
     m_image_data = stbi_load(image_path.c_str(), &m_width, &m_height, &m_colour_channels, colour_channels);
     // if image not loaded return false
     if(m_image_data == NULL) {
+        std::cout << "null image" << std::endl;
         return false;
     }
     std::cout << "IMG: loaded image" << std::endl;
@@ -66,7 +67,7 @@ bool Image::Resize(int req_width, int req_height) {
 }
 
 bool Image::Write(std::string f) {
-    int success;
+    int success = 0;
     std::cout << "IMG: exporting image" << std::endl;
     // do this because c strings are annoying
     std::string filename = f; 
