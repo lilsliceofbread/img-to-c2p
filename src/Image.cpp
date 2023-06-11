@@ -11,6 +11,8 @@
 
 #define JPG_QUALITY 100
 
+// do i technically need all these functions? no
+// am i removing them? no
 Image::Image(std::string image_path, ImageFormat output_format)
  : m_image_data(NULL), m_output_format(output_format) {
     if (!Read(image_path, 0)) {
@@ -30,7 +32,7 @@ Image::Image(std::string image_path, int colour_channels, ImageFormat output_for
 
 
 bool Image::Read(std::string image_path, int colour_channels) {
-    //                                                        channels output     forced amt of channels
+    //                                                                channels output     forced amt of channels
     m_image_data = stbi_load(image_path.c_str(), &m_width, &m_height, &m_colour_channels, colour_channels);
     // if image not loaded return false
     if(m_image_data == NULL) {
@@ -42,8 +44,7 @@ bool Image::Read(std::string image_path, int colour_channels) {
 }
 
 bool Image::Resize(int req_width, int req_height) {
-
-    int success;
+    int success = 0;
     int new_size = req_width * req_height * m_colour_channels;
 
     unsigned char* resized_image_data = (unsigned char*)malloc(new_size);

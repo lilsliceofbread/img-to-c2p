@@ -33,16 +33,19 @@ bool C2PImage::ConvertToC2P(bool keep_aspect_ratio) {
         return false;
     }
 
-    m_formatted_data = (uint8_t*)malloc(HEADER_LENGTH + (m_width * m_height * 2) + FOOTER_LENGTH);
-
     if(!ConvertRGB565()) {
         std::cerr << "ERR: image RGB565 conversion failed" << "\n";
         return false;
     }
+
     if(!CompressData()) {
         std::cerr << "ERR: c2pimage compression failed" << "\n";
         return false;
     }
+    
+    // allocate final data for header creation
+    m_formatted_data = (uint8_t*)malloc(HEADER_LENGTH + m_compressed_data_size + FOOTER_LENGTH);
+
     if(!CreateHeader(m_formatted_data)) {
         std::cerr << "ERR: c2pimage header creation failed" << "\n";
         return false;
@@ -76,9 +79,8 @@ bool C2PImage::Write(std::string f) {
 }
 
 bool C2PImage::ConvertRGB565() {
-    //unsafe af function
     int size = m_width * m_height * m_colour_channels;
-    uint8_t* converted_image_data = (uint8_t*)malloc(sizeof(char) * m_width * m_height * 2);
+    uint8_t* converted_image_data = (uint8_t*)malloc(m_width * m_height * 2);
 
     uint8_t red, green, blue;
     uint16_t final_byte;
@@ -111,8 +113,8 @@ bool C2PImage::ConvertRGB565() {
             final_byte_2 = (uint8_t)((final_byte >> 8) & 0xFF); // bitshift right by 1 byte
 
             // new colour channel bytes is 2
-            converted_image_data[current_converted_index] = final_byte_2;     // topmost byte
-            converted_image_data[current_converted_index + 1] = final_byte_1; // bottom byte
+            converted_image_data[current_converted_index] = final_byte_2;     // bottom byte
+            converted_image_data[current_converted_index + 1] = final_byte_1; // top byte
 
             final_byte = 0;
             final_byte_1 = 0; 
@@ -133,8 +135,10 @@ bool C2PImage::ConvertRGB565() {
 bool C2PImage::CompressData() {
     int success = 0;
     int data_size = m_width * m_height * 2;
-    uLongf alloc_size = (data_size * 1.1) + 12;/* amount we will allocate for compression
-                                            110% for nice safety and 12 bytes padding */
+    uLongf alloc_size = (data_size * 1.1) + 12;// compression allocation size   
+                                               // zlib needs x1.01 + 12 bytes, x1.1 for safety
+                                               // this value becomes the new size after compress() call
+
     uint8_t* compressed_image_data = (uint8_t*)malloc(alloc_size);
 
     success = compress(compressed_image_data, /*casting this value to uLongf* caused much pain don't do it again*/&alloc_size, m_image_data, data_size);
@@ -163,6 +167,8 @@ bool C2PImage::CompressData() {
 bool C2PImage::CreateHeader(uint8_t* image_data) {   
     uint32_t file_size = HEADER_LENGTH + m_compressed_data_size + FOOTER_LENGTH;
 
+    // all of this is explained in .c2p file format documentation
+    // that i found from TIPlanet
     uint32_t _a = ~(file_size & 0xFFFFFF) & 0xFFFFFF; // &ing prevents non-zero values in top byte
     uint8_t _a1 = (uint8_t)(_a & 0xFF);         // separate bytes of value
     uint8_t _a2 = (uint8_t)((_a >> 8) & 0xFF);  // 1-3 goes from bottom byte
@@ -219,17 +225,20 @@ bool C2PImage::CreateHeader(uint8_t* image_data) {
 		0x00, 0x01, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, _f4,  _f3,  _f2,  _f1
     };
 
+    // copy header (header start to end) to start of image data
     std::copy(header, header+HEADER_LENGTH, image_data);
+
     std::cout << "C2P: created header" << std::endl;
     delete header;
     return true;
 }
 
 bool C2PImage::CreateFooter(uint8_t* image_data) {
-    //assert correct length
+    // assert correct length
     if(m_compressed_data_size == 0)
         return false;
 
+    // from .c2p file format document
     uint8_t* footer = new uint8_t[FOOTER_LENGTH]{
         0x30, 0x31, 0x30, 0x30, 0x00, 0x00, 0x00, 0x8C, 0x07, 0x70, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 		0x00, 0x00, 0x60, 0x00, 0x07, 0x70, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00,
@@ -257,15 +266,16 @@ bool C2PImage::CreateFooter(uint8_t* image_data) {
 		0x00, 0x00, 0x10, 0x00, 0x01, 0x01, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
     };
 
+    // copy footer (footer start to end) to start of image + header
     std::copy(footer, footer+FOOTER_LENGTH, image_data+HEADER_LENGTH+m_compressed_data_size);
     std::cout << "C2P: created footer" << std::endl;
-    return true;
     delete footer;
+    return true;
 }
 
 C2PImage::~C2PImage() {
-    /*no idea if i should use free or delete[] here
-      since i used malloc thought i would use c-style free*/
+    //no idea if i should use free or delete[] here
+    //since i used malloc thought i would use c-style free
     std::cout << "C2P: deleted c2pimage instance" << std::endl;
     free(m_formatted_data);
 }

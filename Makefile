@@ -15,6 +15,7 @@ default: obj_compile
 obj_compile: 
 	mkdir -p $(OBJ_DIR)
 	$(CXX) -c $(SOURCES) $(CXX_FLAGS)
+#   idk how to do this correctly
 	mv *.o $(OBJ_DIR)
 
 .PHONY: clean
