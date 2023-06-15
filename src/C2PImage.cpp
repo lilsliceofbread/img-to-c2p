@@ -57,12 +57,12 @@ bool C2PImage::ConvertToC2P(bool keep_aspect_ratio) {
     // no longer need this since am not double freeing
     // gets freed by Image base destructor
     //m_image_data = nullptr; pretty sure this leaked ~0.5GB of memory
-    
 
     if(!CreateFooter(m_formatted_data)) {
         std::cerr << "ERR: c2pimage footer creation failed" << std::endl;
         return false;
     }
+
     return true;
 }
 
@@ -229,7 +229,7 @@ bool C2PImage::CreateHeader(uint8_t* image_data) {
     std::copy(header, header+HEADER_LENGTH, image_data);
 
     std::cout << "C2P: created header" << std::endl;
-    delete header;
+    delete[] header;
     return true;
 }
 
@@ -269,7 +269,7 @@ bool C2PImage::CreateFooter(uint8_t* image_data) {
     // copy footer (footer start to end) to start of image + header
     std::copy(footer, footer+FOOTER_LENGTH, image_data+HEADER_LENGTH+m_compressed_data_size);
     std::cout << "C2P: created footer" << std::endl;
-    delete footer;
+    delete[] footer;
     return true;
 }
 
