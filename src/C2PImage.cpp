@@ -168,7 +168,6 @@ bool C2PImage::CreateHeader(uint8_t* image_data) {
     uint32_t file_size = HEADER_LENGTH + m_compressed_data_size + FOOTER_LENGTH;
 
     // all of this is explained in .c2p file format documentation
-    // that i found from TIPlanet
     uint32_t _a = ~(file_size & 0xFFFFFF) & 0xFFFFFF; // &ing prevents non-zero values in top byte
     uint8_t _a1 = (uint8_t)(_a & 0xFF);         // separate bytes of value
     uint8_t _a2 = (uint8_t)((_a >> 8) & 0xFF);  // 1-3 goes from bottom byte

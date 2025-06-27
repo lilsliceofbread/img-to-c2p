@@ -1,7 +1,8 @@
 # img-to-c2p
 simple command line program to convert images to the C2P format for the Casio Classpad
 
-WARNING: This program might leak memory because I'm an idiot. Use at your own risk
+this is a remake of another program which is designed for windows. [better version if you use windows](https://github.com/the6p4c/Kalkimg)
+
 # using the program
 run `make` to build the executable
 
